@@ -25,5 +25,5 @@ Projektet består af følgende microservices:
 ### 1. Klon projektet
 
 ```bash
-git clone https://github.com/<DIT-BRUGERNAVN>/hotel_kong_arthur.git
+git clone https://github.com/<KINGINTHECASTLE123>/hotel_kong_arthur.git
 cd hotel_kong_arthur
