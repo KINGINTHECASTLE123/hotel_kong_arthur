@@ -25,30 +25,32 @@ def forward_to_service(method, url, json_data=None):
         return jsonify({"error": f"Service unavailable: {str(e)}"}), 503
 
 # ---------------- ROUTES ---------------- #
-@app.route("/api/bookings", methods=["GET", "POST"])
-def bookings():
-    service_url = f"{SERVICE_URLS['booking_service']}/bookings"
-    if request.method == "GET":
-        return forward_to_service("GET", service_url)
-    elif request.method == "POST":
-        return forward_to_service("POST", service_url, json_data=request.get_json())
+@app.get("/api/bookings")
+def gateway_get_bookings():
+    return forward_to_service("GET", f"{SERVICE_URLS['booking_service']}/bookings")
 
-@app.route("/api/drinks", methods=["GET"])
-def drinks():
+@app.post("/api/bookings")
+def gateway_create_booking():
+    return forward_to_service("POST", f"{SERVICE_URLS['booking_service']}/bookings",
+                              json_data=request.get_json())
+
+@app.get("/api/drinks")
+def gateway_get_drinks():
     return forward_to_service("GET", f"{SERVICE_URLS['drinks_service']}/drinks")
 
-@app.route("/api/guests", methods=["GET"])
-def guests():
+@app.get("/api/guests")
+def gateway_get_guests():
     return forward_to_service("GET", f"{SERVICE_URLS['guest_service']}/guests")
 
-@app.route("/api/rooms", methods=["GET"])
-def rooms():
+@app.get("/api/rooms")
+def gateway_get_rooms():
     return forward_to_service("GET", f"{SERVICE_URLS['room_service']}/rooms")
 
-# ---------------- MAIN ---------------- #
+# -------- MAIN -------- #
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000,
-        debug=os.getenv("FLASK_DEBUG", "false").lower() == "true"
+        debug=os.getenv("FLASK_DEBUG", "False").lower() == "true"
     )

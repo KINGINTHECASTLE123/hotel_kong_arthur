@@ -1,82 +1,50 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import mysql.connector
-import os
+import os, mysql.connector
 
 app = Flask(__name__)
 CORS(app)
 
-# ---------------- DATABASE CONFIG ---------------- #
 DATABASE_CONFIG = {
-    "host": os.getenv("DB_HOST", "db"),
+    "host": os.getenv("DB_HOST", "localhost"),
     "user": os.getenv("DB_USER", "root"),
     "password": os.getenv("DB_PASSWORD", ""),
     "database": os.getenv("DB_NAME", "hotel_kong_arthur2"),
 }
 
-# ---------------- HELPER FUNCTION ---------------- #
-def execute_query(query, params=None, fetch=True):
-    try:
-        conn = mysql.connector.connect(**DATABASE_CONFIG)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(query, params or ())
+def execute_query(sql, params=None, fetch_results=True):
+    connection = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(sql, params or ())
+    if fetch_results:
+        rows = cursor.fetchall()
+    else:
+        connection.commit()
+        rows = {"rows_affected": cursor.rowcount, "last_insert_id": cursor.lastrowid}
+    cursor.close(); connection.close()
+    return rows
 
-        if fetch:
-            result = cursor.fetchall()
-        else:
-            conn.commit()
-            result = {
-                "rows_affected": cursor.rowcount,
-                "last_insert_id": cursor.lastrowid
-            }
+@app.get("/rooms")
+def get_all_rooms():
+    return jsonify(execute_query("SELECT * FROM Room ORDER BY room_id"))
 
-        cursor.close()
-        conn.close()
-        return result
+@app.post("/rooms")
+def create_room_type():
+    body = request.get_json()
+    room_type = body["room_type"]
+    price_low = body.get("price_low")
+    price_mid = body.get("price_mid")
+    price_high = body.get("price_high")
+    sql = "INSERT INTO Room (room_type, price_low, price_mid, price_high) VALUES (%s,%s,%s,%s)"
+    result = execute_query(sql, (room_type, price_low, price_mid, price_high), fetch_results=False)
+    return jsonify(result), 201
 
-    except mysql.connector.Error as err:
-        return {"error": str(err)}
+@app.patch("/rooms/<int:room_id>")
+def update_room_prices(room_id):
+    body = request.get_json()
+    sql = "UPDATE Room SET price_low=%s, price_mid=%s, price_high=%s WHERE room_id=%s"
+    result = execute_query(sql, (body.get("price_low"), body.get("price_mid"), body.get("price_high"), room_id), fetch_results=False)
+    return jsonify(result)
 
-# ---------------- ROUTES ---------------- #
-@app.route("/rooms", methods=["GET", "POST"])
-def rooms():
-    if request.method == "GET":
-        query = "SELECT * FROM Room ORDER BY room_id"
-        rooms = execute_query(query)
-        return jsonify(rooms), 200
-
-    elif request.method == "POST":
-        data = request.get_json()
-        query = """
-            INSERT INTO Room (room_type, price_low, price_mid, price_high)
-            VALUES (%s, %s, %s, %s)
-        """
-        params = (
-            data.get("room_type"),
-            data.get("price_low"),
-            data.get("price_mid"),
-            data.get("price_high")
-        )
-        result = execute_query(query, params, fetch=False)
-        return jsonify(result), 201
-
-@app.route("/rooms/<int:room_id>", methods=["PATCH"])
-def update_room(room_id):
-    data = request.get_json()
-    query = """
-        UPDATE Room
-        SET price_low=%s, price_mid=%s, price_high=%s
-        WHERE room_id=%s
-    """
-    params = (
-        data.get("price_low"),
-        data.get("price_mid"),
-        data.get("price_high"),
-        room_id
-    )
-    result = execute_query(query, params, fetch=False)
-    return jsonify(result), 200
-
-# ---------------- MAIN ---------------- #
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5004, debug=False)
+    app.run(port=int(os.getenv("PORT", 5004)), host="0.0.0.0")

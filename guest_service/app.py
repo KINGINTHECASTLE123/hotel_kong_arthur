@@ -1,64 +1,45 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import mysql.connector
-import os
+import os, mysql.connector
 
 app = Flask(__name__)
 CORS(app)
 
-# ---------------- DATABASE CONFIG ---------------- #
 DATABASE_CONFIG = {
-    "host": os.getenv("DB_HOST", "db"),
+    "host": os.getenv("DB_HOST", "localhost"),
     "user": os.getenv("DB_USER", "root"),
     "password": os.getenv("DB_PASSWORD", ""),
     "database": os.getenv("DB_NAME", "hotel_kong_arthur2"),
 }
 
-# ---------------- HELPER FUNCTION ---------------- #
-def execute_query(query, params=None, fetch=True):
-    try:
-        conn = mysql.connector.connect(**DATABASE_CONFIG)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(query, params or ())
+def execute_query(sql, params=None, fetch_results=True):
+    connection = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(sql, params or ())
+    if fetch_results:
+        rows = cursor.fetchall()
+    else:
+        connection.commit()
+        rows = {"rows_affected": cursor.rowcount, "last_insert_id": cursor.lastrowid}
+    cursor.close(); connection.close()
+    return rows
 
-        if fetch:
-            result = cursor.fetchall()
-        else:
-            conn.commit()
-            result = {
-                "rows_affected": cursor.rowcount,
-                "last_insert_id": cursor.lastrowid
-            }
+@app.get("/guests")
+def get_all_guests():
+    return jsonify(execute_query("SELECT * FROM Guest ORDER BY guest_id DESC LIMIT 300"))
 
-        cursor.close()
-        conn.close()
-        return result
+@app.post("/guests")
+def create_guest():
+    body = request.get_json()
+    full_name = body["full_name"]
+    country = body.get("country")
+    email = body.get("email")
+    result = execute_query(
+        "INSERT INTO Guest (full_name, country, email) VALUES (%s, %s, %s)",
+        (full_name, country, email),
+        fetch_results=False
+    )
+    return jsonify(result), 201
 
-    except mysql.connector.Error as err:
-        return {"error": str(err)}
-
-# ---------------- ROUTES ---------------- #
-@app.route("/guests", methods=["GET", "POST"])
-def guests():
-    if request.method == "GET":
-        query = "SELECT * FROM Guest ORDER BY guest_id DESC LIMIT 300"
-        guests = execute_query(query)
-        return jsonify(guests), 200
-
-    elif request.method == "POST":
-        data = request.get_json()
-        full_name = data.get("full_name")
-        country = data.get("country")
-        email = data.get("email")
-
-        query = """
-            INSERT INTO Guest (full_name, country, email)
-            VALUES (%s, %s, %s)
-        """
-        params = (full_name, country, email)
-        result = execute_query(query, params, fetch=False)
-        return jsonify(result), 201
-
-# ---------------- MAIN ---------------- #
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5003, debug=False)
+    app.run(port=int(os.getenv("PORT", 5003)), host="0.0.0.0")

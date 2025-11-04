@@ -1,78 +1,57 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import mysql.connector
-import os
+import os, mysql.connector
 
 app = Flask(__name__)
 CORS(app)
 
-# ---------------- DATABASE CONFIG ---------------- #
+# ----- Database config -----
 DATABASE_CONFIG = {
-    "host": os.getenv("DB_HOST", "db"),
+    "host": os.getenv("DB_HOST", "localhost"),
     "user": os.getenv("DB_USER", "root"),
     "password": os.getenv("DB_PASSWORD", ""),
     "database": os.getenv("DB_NAME", "hotel_kong_arthur2"),
 }
 
-# ---------------- HELPER FUNCTION ---------------- #
-def execute_query(query, params=None, fetch=True):
-    try:
-        conn = mysql.connector.connect(**DATABASE_CONFIG)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(query, params or ())
+def execute_query(sql, params=None, fetch_results=True):
+    connection = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(sql, params or ())
+    if fetch_results:
+        rows = cursor.fetchall()
+    else:
+        connection.commit()
+        rows = {"rows_affected": cursor.rowcount, "last_insert_id": cursor.lastrowid}
+    cursor.close(); connection.close()
+    return rows
 
-        if fetch:
-            result = cursor.fetchall()
-        else:
-            conn.commit()
-            result = {
-                "rows_affected": cursor.rowcount,
-                "last_insert_id": cursor.lastrowid
-            }
+# ----- Endpoints -----
+@app.get("/drinks")
+def get_all_drink_sales():
+    return jsonify(execute_query("SELECT * FROM DrinkSale ORDER BY sale_id DESC LIMIT 300"))
 
-        cursor.close()
-        conn.close()
-        return result
+@app.post("/drinks")
+def create_drink_sale():
+    body = request.get_json()
+    drink_name = body["drink_name"]
+    category = body["category"]
+    price = int(body["price"])
+    units_sold = int(body["units_sold"])
+    total_sale = body.get("total_sale", price * units_sold)
 
-    except mysql.connector.Error as err:
-        return {"error": str(err)}
+    sql = """INSERT INTO DrinkSale (drink_name, category, price, units_sold, total_sale)
+             VALUES (%s, %s, %s, %s, %s)"""
+    result = execute_query(sql, (drink_name, category, price, units_sold, total_sale), fetch_results=False)
+    return jsonify(result), 201
 
-# ---------------- ROUTES ---------------- #
-@app.route("/drinks", methods=["GET", "POST"])
-def drinks():
-    if request.method == "GET":
-        query = "SELECT * FROM DrinkSale ORDER BY sale_id DESC LIMIT 300"
-        drinks = execute_query(query)
-        return jsonify(drinks), 200
+# KPI/aggregater (matchende views du allerede har oprettet)
+@app.get("/drinks/kpi/category")
+def kpi_drinks_by_category():
+    return jsonify(execute_query("SELECT * FROM v_drink_revenue_by_category"))
 
-    elif request.method == "POST":
-        data = request.get_json()
-        drink_name = data.get("drink_name")
-        category = data.get("category")
-        price = float(data.get("price", 0))
-        units_sold = int(data.get("units_sold", 0))
-        total_sale = data.get("total_sale", price * units_sold)
-
-        query = """
-            INSERT INTO DrinkSale (drink_name, category, price, units_sold, total_sale)
-            VALUES (%s, %s, %s, %s, %s)
-        """
-        params = (drink_name, category, price, units_sold, total_sale)
-        result = execute_query(query, params, fetch=False)
-        return jsonify(result), 201
-
-@app.route("/drinks/kpi/category", methods=["GET"])
-def kpi_by_category():
-    query = "SELECT * FROM v_drink_revenue_by_category"
-    result = execute_query(query)
-    return jsonify(result), 200
-
-@app.route("/drinks/kpi/top", methods=["GET"])
+@app.get("/drinks/kpi/top")
 def kpi_top_drinks():
-    query = "SELECT * FROM v_drinks_aggregated ORDER BY revenue DESC LIMIT 50"
-    result = execute_query(query)
-    return jsonify(result), 200
+    return jsonify(execute_query("SELECT * FROM v_drinks_aggregated ORDER BY revenue DESC LIMIT 50"))
 
-# ---------------- MAIN ---------------- #
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5002, debug=False)
+    app.run(port=int(os.getenv("PORT", 5002)), host="0.0.0.0")

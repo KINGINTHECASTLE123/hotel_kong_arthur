@@ -1,31 +1,18 @@
 version: "3.9"
 
 x-common-env: &common_env
-  DB_HOST: db
+  DB_HOST: host.docker.internal 
   DB_USER: ${DB_USER}
   DB_PASSWORD: ${DB_PASSWORD}
   DB_NAME: ${DB_NAME}
   PYTHONUNBUFFERED: "1"
 
 services:
-  db:
-    image: mysql:8.0
-    container_name: hotel_kong_arthur_db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-    ports:
-      - "3307:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-    networks:
-      - hotel_net
-
+  # API Gateway
   api_gateway:
     build:
       context: .
-      dockerfile: api_gateway/DockerFile
+      dockerfile: api_gateway/Dockerfile
     ports:
       - "5050:5000"
     environment:
@@ -35,7 +22,6 @@ services:
       GUEST_SERVICE_URL:   http://guest_service:5003
       ROOM_SERVICE_URL:    http://room_service:5004
     depends_on:
-      - db
       - booking_service
       - drinks_service
       - guest_service
@@ -43,58 +29,55 @@ services:
     networks:
       - hotel_net
 
+  # Booking Service
   booking_service:
     build:
       context: .
-      dockerfile: booking_service/DockerFile
+      dockerfile: booking_service/Dockerfile
     ports:
       - "5001:5001"
     environment: *common_env
-    depends_on:
-      - db
     networks:
       - hotel_net
 
+  # Drinks Service
   drinks_service:
     build:
       context: .
-      dockerfile: drinks_service/DockerFile
+      dockerfile: drinks_service/Dockerfile
     ports:
       - "5002:5002"
     environment: *common_env
-    depends_on:
-      - db
     networks:
       - hotel_net
 
+  # Guest Service
   guest_service:
     build:
       context: .
-      dockerfile: guest_service/DockerFile
+      dockerfile: guest_service/Dockerfile
     ports:
       - "5003:5003"
     environment: *common_env
-    depends_on:
-      - db
     networks:
       - hotel_net
 
+  # Room Service
   room_service:
     build:
       context: .
-      dockerfile: room_service/DockerFile
+      dockerfile: room_service/Dockerfile
     ports:
       - "5004:5004"
     environment: *common_env
-    depends_on:
-      - db
     networks:
       - hotel_net
 
+  # Streamlit UI
   streamlit_ui:
     build:
-      context: .
-      dockerfile: streamlit_ui/DockerFile
+      context: ./streamlit_ui
+      dockerfile: Dockerfile
     ports:
       - "8520:8520"
     environment:
@@ -103,9 +86,6 @@ services:
       - api_gateway
     networks:
       - hotel_net
-
-volumes:
-  db_data:
 
 networks:
   hotel_net:
