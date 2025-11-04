@@ -1,0 +1,261 @@
+USE hotel_kong_arthur2;
+
+
+DROP TABLE IF EXISTS Guest;
+CREATE TABLE Guest (
+    guest_id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    country VARCHAR(100),
+    email VARCHAR(100)
+);
+
+
+DROP TABLE IF EXISTS Room;
+CREATE TABLE Room (
+    room_id INT AUTO_INCREMENT PRIMARY KEY,
+    room_type VARCHAR(100) NOT NULL,
+    price_low INT,
+    price_mid INT,
+    price_high INT
+);
+
+
+DROP TABLE IF EXISTS Booking;
+CREATE TABLE Booking (
+    booking_id INT AUTO_INCREMENT PRIMARY KEY,
+    guest_id INT,
+    room_id INT,
+    season VARCHAR(50),
+    days_rented INT,
+    total_price INT,
+    FOREIGN KEY (guest_id) REFERENCES Guest(guest_id),
+    FOREIGN KEY (room_id) REFERENCES Room(room_id)
+);
+
+
+DROP TABLE IF EXISTS DrinkSale;
+CREATE TABLE DrinkSale (
+    sale_id INT AUTO_INCREMENT PRIMARY KEY,
+    drink_name VARCHAR(100) NOT NULL,
+    category VARCHAR(100),
+    price INT,
+    units_sold INT,
+    total_sale INT
+);
+
+-- eventuelle views til endpoints:
+
+USE hotel_kong_arthur2;
+
+-- BOOKING_OVERVIEW: én række pr. booking med navne & rumtype:
+
+CREATE OR REPLACE VIEW v_booking_overview AS
+SELECT
+  b.booking_id,
+  g.guest_id,
+  g.full_name,
+  g.country,
+  r.room_id,
+  r.room_type,
+  b.season,
+  b.days_rented,
+  b.total_price,
+  CASE WHEN b.days_rented > 0 THEN ROUND(b.total_price / b.days_rented, 2)
+       ELSE NULL END AS avg_price_per_day
+FROM Booking b
+JOIN Guest   g ON g.guest_id = b.guest_id
+JOIN Room    r ON r.room_id  = b.room_id;
+
+-- REVENUE BY ROOM TYPE (til KPI + søjlediagram i Streamlit): 
+
+CREATE OR REPLACE VIEW v_revenue_by_room_type AS
+SELECT
+  r.room_type,
+  COUNT(*)                          AS bookings,
+  SUM(b.days_rented)                AS total_days,
+  SUM(b.total_price)                AS room_revenue,
+  ROUND(SUM(b.total_price) / NULLIF(SUM(b.days_rented),0), 2) AS avg_price_per_day
+FROM Booking b
+JOIN Room r ON r.room_id = b.room_id
+GROUP BY r.room_type;
+
+-- REVENUE BY COUNTRY (KPI pr. land)
+CREATE OR REPLACE VIEW v_revenue_by_country AS
+SELECT
+  g.country,
+  COUNT(*)           AS bookings,
+  SUM(b.total_price) AS room_revenue
+FROM Booking b
+JOIN Guest g ON g.guest_id = b.guest_id
+GROUP BY g.country;
+
+-- REVENUE BY SEASON (LOW/MID/HIGH)
+CREATE OR REPLACE VIEW v_revenue_by_season AS
+SELECT
+  b.season,
+  COUNT(*)                          AS bookings,
+  SUM(b.days_rented)                AS total_days,
+  SUM(b.total_price)                AS room_revenue,
+  ROUND(SUM(b.total_price) / NULLIF(SUM(b.days_rented),0), 2) AS avg_price_per_day
+FROM Booking b
+GROUP BY b.season;
+
+-- DRINKS BY CATEGORY (fx donut: BAR vs COFFEE)
+CREATE OR REPLACE VIEW v_drink_revenue_by_category AS
+SELECT
+  d.category,
+  SUM(d.units_sold) AS units,
+  SUM(d.total_sale) AS revenue
+FROM DrinkSale d
+GROUP BY d.category;
+
+-- DRINKS AGGREGATED (top-liste pr. drink)
+CREATE OR REPLACE VIEW v_drinks_aggregated AS
+SELECT
+  d.drink_name,
+  d.category,
+  SUM(d.units_sold) AS units,
+  SUM(d.total_sale) AS revenue
+FROM DrinkSale d
+GROUP BY d.drink_name, d.category;
+
+-- KPI TOTALS (samlet overblik til gateway)
+CREATE OR REPLACE VIEW v_kpi_totals AS
+SELECT
+  (SELECT COALESCE(SUM(total_price),0) FROM Booking)   AS room_revenue,
+  (SELECT COALESCE(SUM(total_sale),0)  FROM DrinkSale) AS drink_revenue,
+  (SELECT COALESCE(SUM(total_price),0) FROM Booking)
++ (SELECT COALESCE(SUM(total_sale),0)  FROM DrinkSale) AS total_revenue;
+
+USE hotel_kong_arthur2;
+
+-- Kode til at populate tables. Husk at downloade filen og ændre filstien i INFILE: 
+USE hotel_kong_arthur2;
+
+
+DROP TABLE IF EXISTS staging_international_1000;
+CREATE TABLE staging_international_1000 (
+  first_name   VARCHAR(100),
+  family_name  VARCHAR(100),
+  country      VARCHAR(100),
+  room_type    VARCHAR(100),
+  days_rented  INT,
+  season       VARCHAR(50),
+  price        INT
+);
+
+
+LOAD DATA LOCAL INFILE '/Users/eliasgarcia/Downloads/international_names_with_rooms_1000.csv'
+INTO TABLE staging_international_1000
+FIELDS TERMINATED BY ',' ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(first_name, family_name, country, room_type, @days_rented, season, @price)
+SET
+  days_rented = NULLIF(@days_rented,''),
+  price       = NULLIF(@price,'');
+
+-- ROOM: indsæt nye room types
+INSERT INTO Room (room_type)
+SELECT DISTINCT s.room_type
+FROM staging_international_1000 s
+LEFT JOIN Room r ON r.room_type = s.room_type
+WHERE s.room_type IS NOT NULL AND s.room_type <> ''
+  AND r.room_id IS NULL;
+
+-- indsættelse af gæster med opdigtet email
+INSERT INTO Guest (full_name, country, email)
+SELECT
+  CONCAT_WS(' ', s.first_name, s.family_name)                            AS full_name,
+  s.country,
+  CONCAT(
+    LOWER(REPLACE(s.first_name, ' ', '')), '.', LOWER(REPLACE(s.family_name, ' ', '')),
+    '@example.com'
+  ) AS email
+FROM staging_international_1000 s
+LEFT JOIN Guest g
+  ON g.full_name = CONCAT_WS(' ', s.first_name, s.family_name)
+ AND g.country   = s.country
+WHERE g.guest_id IS NULL
+  AND s.first_name IS NOT NULL AND s.first_name <> ''
+  AND s.family_name IS NOT NULL AND s.family_name <> '';
+
+-- BOOKING: map via navn+land → guest_id og room_type → room_id
+INSERT INTO Booking (guest_id, room_id, season, days_rented, total_price)
+SELECT
+  g.guest_id,
+  r.room_id,
+  s.season,
+  s.days_rented,
+  s.price
+FROM staging_international_1000 s
+JOIN Guest g
+  ON g.full_name = CONCAT_WS(' ', s.first_name, s.family_name)
+ AND g.country   = s.country
+JOIN Room r
+  ON r.room_type = s.room_type
+WHERE s.days_rented IS NOT NULL
+  AND s.price IS NOT NULL;
+
+SELECT COUNT(*) AS guests   FROM Guest;
+SELECT COUNT(*) AS rooms    FROM Room;
+SELECT COUNT(*) AS bookings FROM Booking;
+
+LOAD DATA LOCAL INFILE '/Users/eliasgarcia/Downloads/drinks_menu_with_sales (1).csv'
+INTO TABLE DrinkSale
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES
+(drink_name, category, @price_dkk, @units)
+SET
+  price      = NULLIF(@price_dkk,''),
+  units_sold = COALESCE(NULLIF(@units,''), 0),
+  total_sale = price * units_sold;
+
+-- Indsættelse af priser ud fra typen og sæson. Data fra vores opgavesæt. 
+SET SQL_SAFE_UPDATES = 0;
+
+UPDATE Room
+SET
+  price_low =
+    CASE room_type
+      WHEN 'Standard Single'   THEN  900
+      WHEN 'Grand Lit'         THEN 1100
+      WHEN 'Standard Double'   THEN 1200
+      WHEN 'Superior Double'   THEN 1400
+      WHEN 'Junior Suite'      THEN 1800
+      WHEN 'Spa Executive'     THEN 2000
+      WHEN 'Suite'             THEN 2500
+      WHEN 'LOFT Suite'        THEN 3000
+      ELSE price_low
+    END,
+  price_mid =
+    CASE room_type
+      WHEN 'Standard Single'   THEN 1050
+      WHEN 'Grand Lit'         THEN 1250
+      WHEN 'Standard Double'   THEN 1400
+      WHEN 'Superior Double'   THEN 1700
+      WHEN 'Junior Suite'      THEN 2150
+      WHEN 'Spa Executive'     THEN 2400
+      WHEN 'Suite'             THEN 3000
+      WHEN 'LOFT Suite'        THEN 3500
+      ELSE price_mid
+    END,
+  price_high =
+    CASE room_type
+      WHEN 'Standard Single'   THEN 1200
+      WHEN 'Grand Lit'         THEN 1400
+      WHEN 'Standard Double'   THEN 1600
+      WHEN 'Superior Double'   THEN 2000
+      WHEN 'Junior Suite'      THEN 2500
+      WHEN 'Spa Executive'     THEN 2800
+      WHEN 'Suite'             THEN 3500
+      WHEN 'LOFT Suite'        THEN 4000
+      ELSE price_high
+    END;
+
+SET SQL_SAFE_UPDATES = 1;  
+
+
+
