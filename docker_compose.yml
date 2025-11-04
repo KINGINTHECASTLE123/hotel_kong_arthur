@@ -1,0 +1,71 @@
+version: "3.9"
+
+x-common-env: &common_env
+  DB_HOST: ${DB_HOST}
+  DB_USER: ${DB_USER}
+  DB_PASSWORD: ${DB_PASSWORD}
+  DB_NAME: ${DB_NAME}
+  PYTHONUNBUFFERED: "1"
+
+services:
+  api_gateway:
+    build:
+      context: .
+      dockerfile: api_gateway/DockerFile
+    ports:
+      - "5555:5555"
+    environment:
+      <<: *common_env
+      BOOKING_SERVICE_URL: http://booking_service:5001
+      DRINKS_SERVICE_URL:  http://drinks_service:5002
+      GUEST_SERVICE_URL:   http://guest_service:5003
+      ROOM_SERVICE_URL:    http://room_service:5004
+    depends_on:
+      - booking_service
+      - drinks_service
+      - guest_service
+      - room_service
+
+  booking_service:
+    build:
+      context: .
+      dockerfile: booking_service/DockerFile
+    ports:
+      - "5001:5001"
+    environment: *common_env
+
+  drinks_service:
+    build:
+      context: .
+      dockerfile: drinks_service/DockerFile
+    ports:
+      - "5002:5002"
+    environment: *common_env
+
+  guest_service:
+    build:
+      context: .
+      dockerfile: guest_service/DockerFile
+    ports:
+      - "5003:5003"
+    environment: *common_env
+
+  room_service:
+    build:
+      context: .
+      dockerfile: room_service/DockerFile
+    ports:
+      - "5004:5004"
+    environment: *common_env
+
+
+  streamlit_ui:
+    build:
+      context: .
+      dockerfile: streamlit_ui/DockerFile
+    ports:
+      - "8520:8520"
+    environment:
+      GATEWAY_URL: http://api_gateway:5000
+    depends_on:
+      - api_gateway

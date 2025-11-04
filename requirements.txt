@@ -2,3 +2,6 @@
 flask
 requests
 streamlit
+flask-cors
+mysql-connector-python
+requests
