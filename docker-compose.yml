@@ -35,7 +35,7 @@ services:
       context: .
       dockerfile: api_gateway/DockerFile
     ports:
-      - "5555:5555"
+      - "5000:5000"
     environment:
       <<: *common_env
       BOOKING_SERVICE_URL: http://booking_service:5001
@@ -115,7 +115,7 @@ services:
     ports:
       - "8520:8520"
     environment:
-      GATEWAY_URL: http://api_gateway:5555  # Fixed port number
+      API_GATEWAY_URL: http://api_gateway:5000
     depends_on:
       - api_gateway
     networks:

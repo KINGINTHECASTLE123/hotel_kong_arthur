@@ -9,10 +9,10 @@ CORS(app)
 
 # Database config
 DATABASE_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
-    "database": os.getenv("DB_NAME", "hotel_kong_arthur2")
+    "host": os.getenv("DB_HOST", "mysql_db"),
+    "user": os.getenv("DB_USER", "hotel_user"),
+    "password": os.getenv("DB_PASSWORD", "hotel_password"),
+    "database": os.getenv("DB_NAME", "hotel_kong_arthur"),
 }
 
 def execute_query(sql, params=None, fetch_results=True):

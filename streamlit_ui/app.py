@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import os
 
-API_GATEWAY_URL = os.getenv('API_GATEWAY_URL', 'http://api-gateway:5000')  # Gateway modtager ALLE requests
+API_GATEWAY_URL = os.getenv('API_GATEWAY_URL', 'http://api_gateway:5000')  # Gateway modtager ALLE requests
 
 st.set_page_config(page_title="Hotel Kong Arthur Dashboard", layout="wide")
 
@@ -38,7 +38,7 @@ menu = st.sidebar.selectbox(
 if menu == "Gæster":
     st.header("👤 Gæsteliste")
 
-    guests = fetch_data("/guests")
+    guests = fetch_data("/api/guests")
     st.write(f"Total gæster: **{len(guests)}**")
 
     st.dataframe(guests)
@@ -47,14 +47,14 @@ if menu == "Gæster":
 elif menu == "Værelser":
     st.header("🛏️ Værelsesoversigt")
 
-    rooms = fetch_data("/rooms")
+    rooms = fetch_data("/api/rooms")
     st.dataframe(rooms)
 
 # ----------------- BOOKINGER -----------------
 elif menu == "Bookinger":
     st.header("📅 Bookingoversigt")
 
-    bookings = fetch_data("/bookings")
+    bookings = fetch_data("/api/bookings")
     st.write(f"Antal bookinger: **{len(bookings)}**")
     st.dataframe(bookings)
 
@@ -62,7 +62,7 @@ elif menu == "Bookinger":
 elif menu == "Drinks & Bar Salg":
     st.header("🍹 Drinks & Bar Salg Statistik")
 
-    drinks = fetch_data("/drinks")
+    drinks = fetch_data("/api/drinks")
     st.write(f"Antal drikkevarer registreret: **{len(drinks)}**")
     st.dataframe(drinks)
 
