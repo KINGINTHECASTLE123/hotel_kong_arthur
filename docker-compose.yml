@@ -1,0 +1,130 @@
+version: "3.9"
+x-common-env: &common_env
+  DB_HOST: mysql_db  # This needs to match the MySQL service name
+  DB_USER: ${DB_USER:-hotel_user}
+  DB_PASSWORD: ${DB_PASSWORD:-hotel_password}
+  DB_NAME: ${DB_NAME:-hotel_kong_arthur}
+  PYTHONUNBUFFERED: "1"
+
+services:
+  mysql_db:
+    image: mysql:8.0
+    container_name: hotel_mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${DB_NAME:-hotel_kong_arthur}
+      MYSQL_USER: ${DB_USER:-hotel_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-hotel_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s  # Give MySQL more time to start
+    networks:
+      - hotel_network
+
+  # Rest of your services remain the same but add the network
+  api_gateway:
+    build:
+      context: .
+      dockerfile: api_gateway/DockerFile
+    ports:
+      - "5555:5555"
+    environment:
+      <<: *common_env
+      BOOKING_SERVICE_URL: http://booking_service:5001
+      DRINKS_SERVICE_URL:  http://drinks_service:5002
+      GUEST_SERVICE_URL:   http://guest_service:5003
+      ROOM_SERVICE_URL:    http://room_service:5004
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+      booking_service:
+        condition: service_started
+      drinks_service:
+        condition: service_started
+      guest_service:
+        condition: service_started
+      room_service:
+        condition: service_started
+    networks:
+      - hotel_network
+
+  booking_service:
+    build:
+      context: .
+      dockerfile: booking_service/DockerFile
+    ports:
+      - "5001:5001"
+    environment: *common_env
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    networks:
+      - hotel_network
+
+  drinks_service:
+    build:
+      context: .
+      dockerfile: drinks_service/DockerFile
+    ports:
+      - "5002:5002"
+    environment: *common_env
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    networks:
+      - hotel_network
+
+  guest_service:
+    build:
+      context: .
+      dockerfile: guest_service/DockerFile
+    ports:
+      - "5003:5003"
+    environment: *common_env
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    networks:
+      - hotel_network
+
+  room_service:
+    build:
+      context: .
+      dockerfile: room_service/DockerFile
+    ports:
+      - "5004:5004"
+    environment: *common_env
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    networks:
+      - hotel_network
+
+  streamlit_ui:
+    build:
+      context: .
+      dockerfile: streamlit_ui/DockerFile
+    ports:
+      - "8520:8520"
+    environment:
+      GATEWAY_URL: http://api_gateway:5555  # Fixed port number
+    depends_on:
+      - api_gateway
+    networks:
+      - hotel_network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  hotel_network:
+    driver: bridge
