@@ -7,10 +7,10 @@ CORS(app)
 
 # Database configuration (læser fra .env via docker-compose)
 DATABASE_CONFIG = {
-    "host": os.getenv("DB_HOST", "db"),  # matcher service-navnet i docker-compose
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
-    "database": os.getenv("DB_NAME", "hotel_kong_arthur2")
+    "host": os.getenv("DB_HOST", "hotel_mysql_db"),
+    "user": os.getenv("DB_USER", "hotel_user"),
+    "password": os.getenv("DB_PASSWORD", "hotel_password"),
+    "database": os.getenv("DB_NAME", "hotel_kong_arthur"),
 }
 
 def execute_query(query, params=None, fetch=True):
