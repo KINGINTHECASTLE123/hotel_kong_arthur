@@ -33,12 +33,12 @@ Formålet er at bygge et mikrotjenestebaseret system, der understøtter Hotel Ko
     git clone https://github.com/KINGINTHECASTLE123/hotel_kong_arthur.git
     cd hotel_kong_arthur
 
-### 2. Opret .env-fil
-    DB_USER=root
-    DB_PASSWORD=Password
-    DB_NAME=hotel_kong_arthur2
+### 2. Opret et virtual environment   
 
-### 3. Start systemet
+### 3. Opret .env-fil
+    Credentials sendt i separat fil
+
+### 4. Start systemet
     docker compose up --build
 
 ---
