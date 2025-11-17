@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import os
 
-API_GATEWAY_URL = os.getenv('API_GATEWAY_URL', 'http://api_gateway:5000')  # Gateway modtager ALLE requests
+API_GATEWAY_URL = os.getenv('API_GATEWAY_URL', 'http://api_gateway:5500')  # Gateway modtager ALLE requests
 
 st.set_page_config(page_title="Hotel Kong Arthur Dashboard", layout="wide")
 

@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 WORKDIR /app
-COPY requirements.txt /app/requirements.txt
+COPY streamlit_ui/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . /app
+COPY streamlit_ui /app
 EXPOSE 8520
 CMD ["streamlit", "run", "app.py", "--server.port=8520", "--server.address=0.0.0.0"]
